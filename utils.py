@@ -41,15 +41,11 @@ def extract_shopee_ids(url):
     try:
         parsed_url = urlparse(url)
         path = parsed_url.path
-
-        # Improved regex to handle variations in the URL structure
         match = re.search(r"i\.(\d+)\.(\d+)", path)
-
         if match:
             item_id = int(match.group(1))
             shop_id = int(match.group(2))
             return item_id, shop_id
-        
     except Exception as e:
         print(f"Error parsing URL: {e}")
         return None
@@ -60,7 +56,6 @@ def preprocess_comment(comment):
     comment = re.sub(r"\s+", " ", comment).strip()
     # Remove quotation marks
     comment = comment.replace('"', "")
-    # Convert to lowercase
     return comment.lower()
 
 
@@ -84,7 +79,7 @@ def get_shopee_reviews(shop_id, item_id, ratings_to_scrape):
 
     # Initialise a dictionary to count the number of reviews collected for each rating type
     collected_reviews = dict.fromkeys(ratings_to_scrape, 0)
-    failed_ratings = []
+    failed_ratings = []     # List to keep track 403 ratings
 
     for rating in ratings_to_scrape:
         offset = 0  # Reset offset
@@ -97,6 +92,7 @@ def get_shopee_reviews(shop_id, item_id, ratings_to_scrape):
                 "X-Requested-With": "XMLHttpRequest"
             }
 
+            # Shopee API
             url = f"https://shopee.vn/api/v2/item/get_ratings?itemid={item_id}&shopid={shop_id}&limit={limit}&offset={offset}&type={rating}&filter=1"
             
             response = requests.get(url, headers=headers, timeout=10)
@@ -104,15 +100,13 @@ def get_shopee_reviews(shop_id, item_id, ratings_to_scrape):
                 print(f"Failed rating {rating}, status:", response.status_code)
                 failed_ratings.append(rating)
                 break
-
+                
             data = response.json().get("data", {}).get("ratings", [])
             if not data:
-                break  # Stop if no more reviews
-
+                break
             for r in data:
                 if collected_reviews[rating] >= target_count:
                     break 
-
                 comment = r.get("comment", "")
                 if comment:
                     reviews_list.append({
@@ -133,7 +127,6 @@ def get_shopee_reviews(shop_id, item_id, ratings_to_scrape):
 def scrape_reviews(url_file):
     df = load_urls(url_file)
     df_unprocessed = df[df["status"] != "scraped"]
-
     if df_unprocessed.empty:
         print("No URLs left to scrape.")
         return True
@@ -144,7 +137,6 @@ def scrape_reviews(url_file):
         name, url, ratings_to_scrape = row["name"], row["url"], row["ratings_to_scrape"]
         if isinstance(ratings_to_scrape, str):  
             ratings_to_scrape = json.loads(ratings_to_scrape)
-
         print(f"Scraping {name}, ratings to scrape: {ratings_to_scrape}")
 
         try:
@@ -153,7 +145,6 @@ def scrape_reviews(url_file):
             update_ratings_to_scrape(url, failed_ratings, url_file)
             if not failed_ratings:
                 update_url_status(url, "scraped", url_file)
-
         except Exception as e:
             print(f"Error scraping {url}: {e}")
             update_url_status(url, "failed", url_file)
